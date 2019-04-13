@@ -1,8 +1,9 @@
 import json
-import logging, logging.config
+import logging.config
 
 import requests
 from bs4 import BeautifulSoup
+
 from base import BRefMatch, BRefSeason
 from constants import LEAGUES_TO_PATH
 from utils import TimeoutException, convert_to_min
@@ -13,7 +14,6 @@ logger = logging.getLogger('stringer-bell')
 
 
 class NbaBRefMatch(BRefMatch):
-
     uri_base = 'http://www.basketball-reference.com/boxscores/{0}.html'
 
     def _read_table(self, table, last_col):
@@ -32,7 +32,18 @@ class NbaBRefMatch(BRefMatch):
         if not plus_minus and '+/-' in metrics:
             stats.pop(-1)
             metrics.pop(-1)
-        stats = [float(s.text) for s in stats]
+
+        new_stats = []
+        for st in stats:
+            try:
+                new_stats.append(float(st.text))
+            except Exception as e:
+                logger.error(f'Got exception while converting string to float: {st.text}')
+                raise e
+        stats = new_stats
+
+        # stats = [float(s.text) for s in stats]
+
         self.match_[team]['totals'].update(dict(zip(metrics, stats)))
 
     def parse_players(self, team, table):
@@ -46,7 +57,7 @@ class NbaBRefMatch(BRefMatch):
             for metric, stat in zip(metrics, stats):
                 stat = stat if stat != '' else None
                 if metric == 'MP':
-                    stat = stat if stat not in [None, 'Did Not Play', 'Player Suspended'] else '0.0'
+                    stat = stat if stat not in [None, 'Did Not Play', 'Did Not Dress', 'Not With Team', 'Player Suspended'] else '0.0'
                     stat = convert_to_min(stat)
                 stat = float(stat) if stat else None
                 self.match_[team]['players'][name][metric] = stat
@@ -55,6 +66,7 @@ class NbaBRefMatch(BRefMatch):
         """
         generate and add scoring information to match dict
         """
+
         def gen_scoring(table):
             rows = table.find_all('tr')
             quarters = [row.text for row in rows[1].find_all('th')[1:]]
@@ -102,10 +114,11 @@ class NbaBRefSeason(BRefSeason):
                     logger.info('Crawled - {0}'.format(code))
                     break
                 except TimeoutException:
-                    logger.info("Timeout. Couldn't crawl match {0}. Retrying {1}/5".format(code, j+1))
+                    logger.info("Timeout. Couldn't crawl match {0}. Retrying {1}/5".format(code, j + 1))
                     continue
-                except:
-                    logger.exception("Couldn't crawl match{0}".format(code))
+                except Exception as e:
+                    logger.info(e)
+                    logger.exception("Couldn't crawl match {0}".format(code))
                     break
 
     def _gen_matches_codes(self):
@@ -120,6 +133,46 @@ class NbaBRefSeason(BRefSeason):
             self._gen_month_codes(url)
 
     def _gen_month_codes(self, url):
+
+        logger.info(f'Fetching the page from {url}.')
+
+        all_suffixes = [
+            '_1974_games-june.html',
+            '_1975_games-june.html',
+            '_1980_games-june.html',
+            '_1981_games-june.html',
+            '_1983_games-june.html',
+            '_1988_games-october.html',
+            '_1989_games-october.html',
+            '_1990_games-october.html',
+            '_1991_games-october.html',
+            '_1992_games-october.html',
+            '_1993_games-october.html',
+            '_1994_games-october.html',
+            '_1995_games-october.html',
+            '_1996_games-october.html',
+            '_1997_games-october.html',
+            '_1999_games-october.html',
+            '_1999_games-november.html',
+            '_1999_games-december.html',
+            '_1999_games-january.html',
+            '_2000_games-october.html',
+            '_2005_games-october.html',
+            '_2006_games-october.html',
+            '_2012_games-october.html',
+            '_2012_games-november.html'
+        ]
+
+        bad_url = False
+        for suffix in all_suffixes:
+            if url.endswith(suffix):
+                bad_url = True
+                break
+
+        if bad_url is True:
+            logger.info(f'Skipping URL because month is unavailable (late start season) --> ({url})')
+            return
+
         rv = requests.get(url)
         soup = BeautifulSoup(rv.text)
         seasons = soup.find_all('table', {'class': 'stats_table'})

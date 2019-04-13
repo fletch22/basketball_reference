@@ -18,7 +18,7 @@ with open('logging.json', 'r') as f:
     logging.config.dictConfig(json.load(f))
 logger = logging.getLogger('stringer-bell')
 
-signal.signal(signal.SIGALRM, timeout_handler)
+signal.signal(signal.SIGBREAK, timeout_handler)
 
 CACHE_PLAYERS_BASIC_INFO = {}
 CACHE_PLAYERS_RATIO = {}
@@ -75,7 +75,13 @@ class PlayerBasicInfo():
         self.player_wiki_ = WikipediaPlayer(self.name, self.team_info.name)
         height = self._get_height()
         weight = self._get_weight()
-        start, end = self.player_wiki_.playing_career.replace('\n', '').split('–')
+
+        # line = self.player_wiki_.playing_career
+        # if "\xe2" in line:
+        #     print repr(line)
+        #     raise Exception('cbf-xe2')
+
+        start, end = self.player_wiki_.playing_career.replace('\n', '').split(u'\u2013')
         if end == 'present':
             exp = datetime.now().year - int(start)
         else:
@@ -174,6 +180,11 @@ class BRefMatch:
         generate all stats for a nba match
         """
         match_url = self.uri_base.format(self.code)
+
+        logging.info(match_url)
+
+        # raise Exception("bar")
+
         headers = {'User-agent': random.choice(USER_AGENTS)}
         rv = requests.get(match_url, headers=headers)
         self.soup_ = BeautifulSoup(rv.text)

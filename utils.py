@@ -132,13 +132,13 @@ def timeout_handler(signum, frame):
 def timeout(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
-        signal.alarm(10000)
+        # signal.alarm(10000)
         try:
             func(*args, **kwargs)
         except TimeoutException:
             raise TimeoutException
-        finally:
-            signal.alarm(0)
+        # finally:
+            # signal.alarm(0)
     return wrapper
 
 
